@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
-
-import '../models/endereco_model.dart';
-import '../repositories/cep_repository.dart';
-import '../repositories/cep_repository_impl.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:flutter_bloc_introduction/pages/state_subclass/home_controller.dart';
+import 'package:flutter_bloc_introduction/pages/state_subclass/home_state.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -12,16 +11,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  @override
-  final CepRepository cepRepository = CepRepositoryImpl();
-  EnderecoModel? enderecoModel;
-
+  final homeController = HomeController();
   final formkey = GlobalKey<FormState>();
-  bool loading = false;
-
-  //controladora
   final cepEC = TextEditingController();
-//toda controladora PRECISA ser encerrada ou pode gerar um escape de memória
+
   @override
   void dispose() {
     cepEC.dispose();
@@ -30,66 +23,68 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Buscar CEP"),
-      ),
-      body: SingleChildScrollView(
-        child: Form(
-            key: formkey,
-            child: Padding(
-              padding: const EdgeInsets.all(8.0),
-              child: Column(
-                children: [
-                  TextFormField(
-                    controller: cepEC,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return "CEP Obrigatório";
-                      }
-                      return null;
-                    },
-                  ),
-                  ElevatedButton(
-                    onPressed: () async {
-                      final valid = formkey.currentState?.validate() ?? false;
-                      if (valid) {
-                        try {
-                          setState(() {
-                            loading = true;
-                          });
-                          final endereco =
-                              await cepRepository.getCep(cepEC.text);
-                          setState(() {
-                            loading = false;
-                            enderecoModel = endereco;
-                          });
-                        } catch (e) {
-                          setState(() {
-                            loading = false;
-                            enderecoModel = null;
-                          });
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                                content: Text("Erro ao buscar Endereço")),
+    return BlocListener<HomeController, HomeState>(
+      bloc: homeController,
+      listener: (context, state) {
+        if (state is HomeFailure) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Erro ao buscar Endereço")),
+          );
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Buscar CEP"),
+        ),
+        body: SingleChildScrollView(
+          child: Form(
+              key: formkey,
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  children: [
+                    TextFormField(
+                      controller: cepEC,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return "CEP Obrigatório";
+                        }
+                        return null;
+                      },
+                    ),
+                    ElevatedButton(
+                      onPressed: () async {
+                        final valid = formkey.currentState?.validate() ?? false;
+                        if (valid) {
+                          homeController.findCep(cepEC.text);
+                        }
+                      },
+                      child: const Text("Buscar"),
+                    ),
+                    BlocBuilder<HomeController, HomeState>(
+                      bloc: homeController,
+                      builder: (context, state) {
+                        return Visibility(
+                          visible: state is HomeLoading,
+                          child: const CircularProgressIndicator(),
+                        );
+                      },
+                    ),
+                    BlocBuilder<HomeController, HomeState>(
+                      bloc: homeController,
+                      builder: (context, state) {
+                        if (state is HomeLoaded) {
+                          return Text(
+                            "Logradouro:${state.enderecoModel.logradouro} \nComplemento: ${state.enderecoModel.complemento} \nCEP:${state.enderecoModel.cep}",
                           );
                         }
-                      }
-                    },
-                    child: const Text("Buscar"),
-                  ),
-                  //const Text("Logradouro, Complemento, Cep")
-                  Visibility(
-                      visible: loading, child: CircularProgressIndicator()),
-                  Visibility(
-                    visible: enderecoModel != null,
-                    child: Text(
-                      "Logradouro:${enderecoModel?.logradouro} \nComplemento: ${enderecoModel?.complemento} \nCEP:${enderecoModel?.cep}",
-                    ),
-                  )
-                ],
-              ),
-            )),
+                        return const SizedBox.shrink();
+                      },
+                    )
+                  ],
+                ),
+              )),
+        ),
       ),
     );
   }
